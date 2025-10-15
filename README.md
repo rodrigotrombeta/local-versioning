@@ -9,6 +9,7 @@ A Mac desktop application that automatically tracks file changes and maintains v
 - Visual diff viewer to compare any two versions
 - Simple file restoration to previous versions
 - In-app file editing with live Markdown preview
+- View deleted files and their version history
 - Clean, modern UI built with Electron and React
 - Customizable ignore patterns for files and folders
 - Multiple folder tracking support
@@ -25,80 +26,117 @@ A Mac desktop application that automatically tracks file changes and maintains v
 | Version Control | Git (via simple-git) |
 | Diff Display | react-diff-viewer-continued |
 
-## Installation
+## Prerequisites
 
-### Prerequisites
+### Required (To Use the Application)
 
-- Node.js 18+ and npm (for development only)
-- **Git installed on your system** (required for the app to function)
-- macOS (optimized for Mac, but can work on other platforms)
+**Git** - The application requires Git to be installed on your Mac.
 
-**Note:** Git comes pre-installed on macOS 10.9 and later. If you need to install or update Git, use:
+Check if Git is installed:
 ```bash
-# Check if Git is installed
 git --version
+```
 
-# Install/update Git via Homebrew (if needed)
+If not installed, install via Homebrew:
+```bash
 brew install git
 ```
 
-### Setup
+Note: Git comes pre-installed on macOS 10.9 and later.
 
-**For Development:**
+### Required (For Development)
+
+If you want to build or modify the application, you also need:
+
+**Node.js 18+** and **npm**
+
+Check if Node.js is installed:
 ```bash
-# Install dependencies
-npm install
+node --version
+npm --version
+```
 
-# Run in development mode
+Install Node.js via Homebrew:
+```bash
+brew install node
+```
+
+Or download from [nodejs.org](https://nodejs.org/)
+
+## Installation
+
+### For End Users
+
+1. Download `Local Versioning-1.0.0-arm64.dmg` from the releases page
+2. Open the `.dmg` file
+3. Drag "Local Versioning" to your Applications folder
+4. Launch from Applications or Spotlight (Cmd+Space, type "Local Versioning")
+
+### For Developers
+
+Clone and setup:
+```bash
+git clone <repository-url>
+cd local_versioning
+npm install
+```
+
+Run in development mode:
+```bash
 npm run dev
 ```
 
-**To Create a Standalone Application:**
+Build the application:
 ```bash
-# Make the build script executable (first time only)
-chmod +x build.sh
-
-# Build the application
-./build.sh
-
-# Or manually:
 npm run build
 npm run build:electron
 ```
 
 After building, you'll find:
-- `dist/Local Versioning-1.0.0.dmg` - Installer (double-click to install)
-- `dist/mac/Local Versioning.app` - The application itself
-
-**To Install:**
-1. Open the `.dmg` file
-2. Drag "Local Versioning" to your Applications folder
-3. Launch from Applications or Spotlight (Cmd+Space)
+- `dist/Local Versioning-1.0.0-arm64.dmg` - Installer
+- `dist/mac-arm64/Local Versioning.app` - Application bundle
 
 ## Usage
 
 ### Adding a Folder to Watch
 
-1. Click the "Add Folder" button in the left sidebar
+1. Click the "+" button in the left sidebar
 2. Select the folder you want to track
 3. The folder will immediately start being watched
+
+### Removing a Folder
+
+1. Select the folder in the left sidebar
+2. Click the "-" button
+3. This removes the folder from tracking (does not delete files or versions)
 
 ### Viewing Version History
 
 1. Select a folder from the left sidebar
-2. The center panel shows all commits (versions) in chronological order
-3. Click on any commit to see which files were changed
+2. The center panel shows the file tree
+3. Click on any file to view its content and version history
+4. The right panel shows "Current Version" and all historical versions
 
-### Comparing Versions
+### Viewing Deleted Files
 
-1. Select a commit to view its changed files
-2. Click on a file to see the diff between that version and the current version
-3. Optionally, click "Compare" on another commit to compare two historical versions
+1. Check the "Show deleted files" checkbox below the file tree
+2. Deleted files appear in red with strikethrough text in a separate "Deleted Files" section
+3. Click on a deleted file to view its last version before deletion
+4. All previous versions of the deleted file are still available
+5. You can restore deleted files using the "Restore" button
+
+### Editing Files
+
+1. Click on any file to view its content
+2. Click the "Edit" button to modify the file
+3. Make your changes in the editor
+4. Click "Save" to save changes (creates a new version automatically)
+5. Changes are committed based on your commit strategy
 
 ### Restoring Files
 
-1. Select a commit
-2. Click on a file to view the diff
+1. Click on a file to view its versions
+2. Click on any version in the right panel to see that version's content
 3. Click the "Restore" button to restore the file to that version
 4. Confirm the restoration
 
