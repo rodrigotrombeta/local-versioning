@@ -120,8 +120,10 @@ function App() {
     try {
       const loadedFolders = await window.electronAPI.getFolders();
       setFolders(loadedFolders);
+      return loadedFolders;
     } catch (error) {
       console.error('Failed to load folders:', error);
+      return [];
     }
   };
 
@@ -148,11 +150,8 @@ function App() {
       console.log('All unique files for this folder:', filesArray);
       setAllFiles(filesArray);
       
-      // Update the all folders files map
-      setAllFoldersFiles(prev => ({
-        ...prev,
-        [folderId]: filesArray
-      }));
+      // Note: Don't update allFoldersFiles here - it's managed by loadAllFoldersFiles()
+      // which reads from the file system directly, not just from commits
     } catch (error) {
       console.error('Failed to load commits:', error);
     } finally {
@@ -161,9 +160,11 @@ function App() {
   };
   
   // Load files for all folders
-  const loadAllFoldersFiles = async () => {
+  const loadAllFoldersFiles = async (foldersToLoad?: WatchedFolder[]) => {
+    const targetFolders = foldersToLoad || folders;
+    
     const filesMap: Record<string, string[]> = {};
-    for (const folder of folders) {
+    for (const folder of targetFolders) {
       try {
         const uniqueFiles = new Set<string>();
         
@@ -193,6 +194,7 @@ function App() {
         filesMap[folder.id] = [];
       }
     }
+    
     setAllFoldersFiles(filesMap);
   };
   
@@ -230,7 +232,9 @@ function App() {
       
       // If no existing repo, just add the folder
       await window.electronAPI.addFolder(folderPath);
-      await loadFolders();
+      const updatedFolders = await loadFolders();
+      // Reload files for all folders to show new folder's files immediately
+      await loadAllFoldersFiles(updatedFolders);
     } catch (error) {
       console.error('Failed to add folder:', error);
     }
@@ -253,9 +257,12 @@ function App() {
       }
       
       await window.electronAPI.startWatching(folder.id);
-      await loadFolders();
-      setSelectedFolder(folder);
       
+      // Reload folders and load files explicitly
+      const updatedFolders = await loadFolders();
+      await loadAllFoldersFiles(updatedFolders);
+      
+      setSelectedFolder(folder);
       setReconnectDialog(null);
     } catch (error) {
       console.error('Failed to reconnect:', error);
@@ -280,7 +287,9 @@ function App() {
       }
       
       await window.electronAPI.startWatching(folder.id);
-      await loadFolders();
+      const updatedFolders = await loadFolders();
+      // Reload files to show folder's files immediately
+      await loadAllFoldersFiles(updatedFolders);
       setSelectedFolder(folder);
       
       setReconnectDialog(null);
@@ -340,24 +349,43 @@ function App() {
         commit.changedFiles.includes(filePath)
       );
       
-      // Get the latest version of the file (most recent commit)
+      let content = '';
+      
       if (commitsWithFile.length > 0) {
+        // Get the latest version from Git (most recent commit)
         const latestCommit = commitsWithFile[0];
-        const content = await window.electronAPI.getFileContent(
+        content = await window.electronAPI.getFileContent(
           selectedFolder.id,
           latestCommit.hash,
           filePath
         );
-        
-        // Show as both old and new (no diff yet, just content)
-        setDiffResult({
-          oldContent: content,
-          newContent: content,
-          fileName: filePath.split('/').pop() || filePath,
-          oldCommit: 'current',
-          newCommit: 'current'
-        });
+      } else {
+        // No commits yet - read file directly from disk
+        if (window.electronAPI.readFileFromDisk) {
+          const result = await window.electronAPI.readFileFromDisk(
+            selectedFolder.path,
+            filePath
+          );
+          if (result.success && result.content) {
+            content = result.content;
+          } else {
+            console.error('Failed to read file from disk:', result.error);
+            return;
+          }
+        } else {
+          console.error('readFileFromDisk API not available');
+          return;
+        }
       }
+      
+      // Show as both old and new (no diff yet, just content)
+      setDiffResult({
+        oldContent: content,
+        newContent: content,
+        fileName: filePath.split('/').pop() || filePath,
+        oldCommit: 'current',
+        newCommit: 'current'
+      });
     } catch (error) {
       console.error('Failed to load file content:', error);
     } finally {

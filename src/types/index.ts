@@ -73,6 +73,7 @@ export interface ElectronAPI {
   saveFile?: (folderPath: string, filePath: string, content: string) => Promise<{ success: boolean; error?: string }>;
   createFile?: (folderPath: string, fileName: string) => Promise<{ success: boolean; error?: string }>;
   listFolderFiles?: (folderPath: string) => Promise<string[]>;
+  readFileFromDisk?: (folderPath: string, filePath: string) => Promise<{ success: boolean; content?: string; error?: string }>;
   
   // Git repository migration
   migrateGitRepository: (folderId: string, newGitPath: string) => Promise<{ success: boolean; error?: string }>;

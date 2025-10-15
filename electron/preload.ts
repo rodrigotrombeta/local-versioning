@@ -37,6 +37,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   createFile: (folderPath: string, fileName: string) => 
     ipcRenderer.invoke('create-file', folderPath, fileName),
   listFolderFiles: (folderPath: string) => ipcRenderer.invoke('list-folder-files', folderPath),
+  readFileFromDisk: (folderPath: string, filePath: string) => 
+    ipcRenderer.invoke('read-file-from-disk', folderPath, filePath),
   
   // Git repository migration
   migrateGitRepository: (folderId: string, newGitPath: string) => 

@@ -387,6 +387,32 @@ ipcMain.handle('create-file', async (_event, folderPath: string, fileName: strin
   }
 });
 
+// Read file directly from disk (for files without commits yet)
+ipcMain.handle('read-file-from-disk', async (_event, folderPath: string, filePath: string) => {
+  try {
+    const fullPath = path.join(folderPath, filePath);
+    
+    if (!fs.existsSync(fullPath)) {
+      return {
+        success: false,
+        error: 'File not found'
+      };
+    }
+    
+    const content = fs.readFileSync(fullPath, 'utf8');
+    return {
+      success: true,
+      content
+    };
+  } catch (error) {
+    console.error('Error reading file from disk:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error'
+    };
+  }
+});
+
 // List all files in a folder recursively
 ipcMain.handle('list-folder-files', async (_event, folderPath: string) => {
   try {
@@ -401,11 +427,17 @@ ipcMain.handle('list-folder-files', async (_event, folderPath: string) => {
       'dist',
       'build',
       '.next',
-      '.cache'
+      '.cache',
+      '.obsidian',
+      '.vscode'
     ];
     
     function shouldIgnore(fileName: string): boolean {
-      return ignorePatterns.some(pattern => fileName.includes(pattern));
+      return ignorePatterns.some(pattern => {
+        if (fileName === pattern) return true;
+        if (fileName.startsWith(pattern + '/')) return true;
+        return false;
+      });
     }
     
     function walkDir(dir: string, baseDir: string = dir) {
