@@ -263,17 +263,74 @@ export class GitService {
     }
   }
   
+  /**
+   * Get file content from a commit, or from previous commit if file was deleted in specified commit
+   */
+  async getFileContentSafe(commitHash: string, filePath: string): Promise<string> {
+    try {
+      // Try to get content from specified commit
+      return await this.getFileContent(commitHash, filePath);
+    } catch (error) {
+      // File doesn't exist in this commit (probably deleted)
+      // Get all commits that touched this file and find the next one
+      console.log(`File not found in commit ${commitHash}, searching previous commits...`);
+      
+      try {
+        const commits = await this.getCommits(100);
+        
+        // Find commits where this file was changed
+        const commitsWithFile: string[] = [];
+        for (const commit of commits) {
+          const changedFiles = commit.changedFiles || [];
+          if (changedFiles.some((f: string) => f === filePath)) {
+            commitsWithFile.push(commit.hash);
+          }
+        }
+        
+        // Find the index of the requested commit
+        const commitIndex = commitsWithFile.indexOf(commitHash);
+        
+        if (commitIndex === -1) {
+          throw new Error(`Commit ${commitHash} not found in file history`);
+        }
+        
+        // Try subsequent commits (older ones) until we find the file
+        for (let i = commitIndex + 1; i < commitsWithFile.length; i++) {
+          try {
+            console.log(`Trying commit ${i}: ${commitsWithFile[i]}`);
+            return await this.getFileContent(commitsWithFile[i], filePath);
+          } catch (err) {
+            // Continue to next commit
+            continue;
+          }
+        }
+        
+        throw new Error(`File not found in any commit in history`);
+      } catch (historyError) {
+        const errorMessage = historyError instanceof Error ? historyError.message : String(historyError);
+        throw new Error(`Failed to find file in history: ${errorMessage}`);
+      }
+    }
+  }
+  
   async getDiff(filePath: string, oldCommit: string, newCommit?: string): Promise<DiffResult> {
     try {
-      const oldContent = await this.getFileContent(oldCommit, filePath);
+      // Use safe method that handles deleted files
+      const oldContent = await this.getFileContentSafe(oldCommit, filePath);
       
       let newContent: string;
       if (newCommit) {
-        newContent = await this.getFileContent(newCommit, filePath);
+        // Use safe method for the new commit too
+        newContent = await this.getFileContentSafe(newCommit, filePath);
       } else {
-        // Read current file content
+        // Try to read current file content from disk
         const fullPath = path.join(this.workingDir, filePath);
-        newContent = fs.readFileSync(fullPath, 'utf-8');
+        if (fs.existsSync(fullPath)) {
+          newContent = fs.readFileSync(fullPath, 'utf-8');
+        } else {
+          // File deleted from disk, show empty content
+          newContent = '';
+        }
       }
       
       return {
@@ -291,8 +348,8 @@ export class GitService {
   
   async restoreFile(filePath: string, commitHash: string): Promise<void> {
     try {
-      // Get file content from commit
-      const content = await this.getFileContent(commitHash, filePath);
+      // Get file content from commit (use safe method that handles deleted files)
+      const content = await this.getFileContentSafe(commitHash, filePath);
       
       // Write to file
       const fullPath = path.join(this.workingDir, filePath);
