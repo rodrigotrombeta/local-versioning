@@ -375,13 +375,17 @@ function App() {
     try {
       setLoading(true);
       
+      console.log(`=== loadCurrentFileContent for: ${filePath} ===`);
+      
       // Get fresh commits for this folder
       const allCommits = await window.electronAPI.getCommits(targetFolderId, 100);
+      console.log(`Total commits: ${allCommits.length}`);
       
       // Filter commits that contain this file
       const commitsWithFile = allCommits.filter(commit => 
         commit.changedFiles.includes(filePath)
       );
+      console.log(`Commits with this file: ${commitsWithFile.length}`);
       
       // Set file commits for the versions panel
       setFileCommits(commitsWithFile);
@@ -390,13 +394,34 @@ function App() {
       let isDeletedFile = false;
       
       if (commitsWithFile.length > 0) {
-        // Get the latest version from Git (most recent commit)
-        const latestCommit = commitsWithFile[0];
-        content = await window.electronAPI.getFileContent(
-          targetFolderId,
-          latestCommit.hash,
-          filePath
-        );
+        // Try to get content from the most recent commit
+        let commitToUse = commitsWithFile[0];
+        let contentFound = false;
+        
+        // For deleted files, the most recent commit might be the deletion commit
+        // where the file doesn't exist. Try commits in order until we find one with content.
+        for (let i = 0; i < commitsWithFile.length; i++) {
+          try {
+            console.log(`Trying to read file from Git commit: ${commitsWithFile[i].hash}`);
+            content = await window.electronAPI.getFileContent(
+              targetFolderId,
+              commitsWithFile[i].hash,
+              filePath
+            );
+            commitToUse = commitsWithFile[i];
+            contentFound = true;
+            console.log(`Content loaded from Git commit ${i}, length: ${content.length}`);
+            break;
+          } catch (err) {
+            console.log(`File doesn't exist in commit ${i}, trying next...`);
+            continue;
+          }
+        }
+        
+        if (!contentFound) {
+          console.error('File not found in any commit');
+          return;
+        }
         
         // Check if file is deleted (exists in Git but not on disk)
         const targetFolder = folders.find(f => f.id === targetFolderId);
@@ -406,8 +431,10 @@ function App() {
             filePath
           );
           isDeletedFile = !diskResult.success;
+          console.log(`File deleted from disk: ${isDeletedFile}`);
         }
       } else {
+        console.log('No commits found, reading from disk');
         // No commits yet - read file directly from disk
         const targetFolder = folders.find(f => f.id === targetFolderId);
         if (targetFolder && window.electronAPI.readFileFromDisk) {
@@ -417,6 +444,7 @@ function App() {
           );
           if (result.success && result.content) {
             content = result.content;
+            console.log(`Content loaded from disk, length: ${content.length}`);
           } else {
             console.error('Failed to read file from disk:', result.error);
             return;
@@ -426,6 +454,8 @@ function App() {
           return;
         }
       }
+      
+      console.log(`Setting diffResult with content length: ${content.length}, isDeleted: ${isDeletedFile}`);
       
       // Show as both old and new (no diff yet, just content)
       setDiffResult({
