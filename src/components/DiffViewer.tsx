@@ -68,12 +68,13 @@ const DiffViewer: React.FC<DiffViewerProps> = ({ diffResult, folderPath, onConte
   
   // Check if we're showing the same content (no diff)
   const isShowingCurrentOnly = diffResult.oldCommit === 'current' && diffResult.newCommit === 'current';
+  const isDeletedFile = diffResult.oldCommit === 'deleted';
   
   // Determine file type
   const isMarkdown = diffResult.fileName.toLowerCase().endsWith('.md');
   const language = getLanguageFromExtension(diffResult.fileName);
   const isCodeFile = language !== 'text' && language !== 'markdown';
-  const canEdit = isShowingCurrentOnly && folderPath; // Only allow editing current file content
+  const canEdit = isShowingCurrentOnly && folderPath && !isDeletedFile; // Only allow editing current file content, not deleted files
 
   // Initialize edited content when entering edit mode
   const handleStartEdit = () => {
@@ -192,11 +193,27 @@ const DiffViewer: React.FC<DiffViewerProps> = ({ diffResult, folderPath, onConte
 
   return (
     <div className="h-full flex flex-col bg-white">
+      {/* Deleted File Banner */}
+      {isDeletedFile && (
+        <div className="bg-red-50 border-b-2 border-red-200 px-4 py-2">
+          <p className="text-sm text-red-700 font-medium">
+            ⚠️ This file has been deleted. You are viewing the last saved version from the Git history.
+          </p>
+          <p className="text-xs text-red-600 mt-1">
+            To restore this file, select a version from the right panel and click "Restore".
+          </p>
+        </div>
+      )}
+      
       <div className="p-3 border-b border-gray-200 flex items-center justify-between">
         <div className="flex items-center gap-4">
           <div>
             <h3 className="text-sm font-semibold">{diffResult.fileName}</h3>
-            {isShowingCurrentOnly ? (
+            {isDeletedFile ? (
+              <p className="text-xs text-red-500">
+                Deleted file - Last version from Git history
+              </p>
+            ) : isShowingCurrentOnly ? (
               <p className="text-xs text-gray-500">
                 {isEditing ? 'Editing file' : 'Current file content - Select a version to see differences'}
               </p>

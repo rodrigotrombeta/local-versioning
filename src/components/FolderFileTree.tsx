@@ -10,7 +10,9 @@ interface FileNode {
 
 interface FolderFileTreeProps {
   folders: WatchedFolder[];
-  allFiles: Record<string, string[]>; // folderId -> file paths
+  allFiles: Record<string, string[]>; // folderId -> current file paths
+  deletedFiles: Record<string, string[]>; // folderId -> deleted file paths
+  showDeletedFiles: boolean;
   selectedFolder: WatchedFolder | null;
   selectedFile: string | null;
   onSelectFolder: (folder: WatchedFolder) => void;
@@ -20,6 +22,8 @@ interface FolderFileTreeProps {
 const FolderFileTree: React.FC<FolderFileTreeProps> = ({
   folders,
   allFiles,
+  deletedFiles,
+  showDeletedFiles,
   selectedFolder,
   selectedFile,
   onSelectFolder,
@@ -111,7 +115,7 @@ const FolderFileTree: React.FC<FolderFileTreeProps> = ({
     setExpandedNodes(newExpanded);
   };
 
-  const renderFileNode = (node: FileNode, folderId: string, depth: number = 0): React.ReactNode => {
+  const renderFileNode = (node: FileNode, folderId: string, depth: number = 0, isDeleted: boolean = false): React.ReactNode => {
     const isExpanded = expandedNodes.has(node.path);
     const isSelected = selectedFile === node.path && selectedFolder?.id === folderId;
 
@@ -120,11 +124,15 @@ const FolderFileTree: React.FC<FolderFileTreeProps> = ({
         <div key={node.path}>
           <div
             onClick={() => toggleNode(node.path)}
-            className="flex items-center gap-1 px-2 py-1 text-sm cursor-pointer hover:bg-gray-100"
+            className={`flex items-center gap-1 px-2 py-1 text-sm cursor-pointer ${
+              isDeleted ? 'hover:bg-red-50' : 'hover:bg-gray-100'
+            }`}
             style={{ paddingLeft: `${depth * 12 + 8}px` }}
           >
             <svg
-              className={`w-3 h-3 text-gray-500 transition-transform ${isExpanded ? 'rotate-90' : ''}`}
+              className={`w-3 h-3 transition-transform ${isExpanded ? 'rotate-90' : ''} ${
+                isDeleted ? 'text-red-400' : 'text-gray-500'
+              }`}
               fill="currentColor"
               viewBox="0 0 20 20"
             >
@@ -134,14 +142,14 @@ const FolderFileTree: React.FC<FolderFileTreeProps> = ({
                 clipRule="evenodd"
               />
             </svg>
-            <svg className="w-4 h-4 text-blue-500" fill="currentColor" viewBox="0 0 20 20">
+            <svg className={`w-4 h-4 ${isDeleted ? 'text-red-400' : 'text-blue-500'}`} fill="currentColor" viewBox="0 0 20 20">
               <path d="M2 6a2 2 0 012-2h5l2 2h5a2 2 0 012 2v6a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" />
             </svg>
-            <span className="text-gray-700 truncate">{node.name}</span>
+            <span className={`truncate ${isDeleted ? 'text-red-500 line-through' : 'text-gray-700'}`}>{node.name}</span>
           </div>
           {isExpanded && node.children && (
             <div>
-              {node.children.map((child) => renderFileNode(child, folderId, depth + 1))}
+              {node.children.map((child) => renderFileNode(child, folderId, depth + 1, isDeleted))}
             </div>
           )}
         </div>
@@ -152,18 +160,22 @@ const FolderFileTree: React.FC<FolderFileTreeProps> = ({
           key={node.path}
           onClick={() => onSelectFile(folderId, node.path)}
           className={`flex items-center gap-1 px-2 py-1 text-sm cursor-pointer ${
-            isSelected ? 'bg-blue-100 text-blue-700' : 'hover:bg-gray-100 text-gray-700'
+            isSelected 
+              ? 'bg-blue-100 text-blue-700' 
+              : isDeleted 
+              ? 'hover:bg-red-50 text-red-500' 
+              : 'hover:bg-gray-100 text-gray-700'
           }`}
           style={{ paddingLeft: `${depth * 12 + 20}px` }}
         >
-          <svg className="w-4 h-4 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+          <svg className={`w-4 h-4 ${isDeleted ? 'text-red-400' : 'text-gray-400'}`} fill="currentColor" viewBox="0 0 20 20">
             <path
               fillRule="evenodd"
               d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z"
               clipRule="evenodd"
             />
           </svg>
-          <span className="truncate">{node.name}</span>
+          <span className={`truncate ${isDeleted ? 'line-through' : ''}`}>{node.name}</span>
         </div>
       );
     }
@@ -174,7 +186,9 @@ const FolderFileTree: React.FC<FolderFileTreeProps> = ({
       {folders.map((folder) => {
         const isExpanded = expandedFolders.has(folder.id);
         const files = allFiles[folder.id] || [];
+        const deleted = deletedFiles[folder.id] || [];
         const fileTree = buildFileTree(files);
+        const deletedTree = showDeletedFiles ? buildFileTree(deleted) : [];
         const isSelected = selectedFolder?.id === folder.id;
 
         return (
@@ -215,10 +229,23 @@ const FolderFileTree: React.FC<FolderFileTreeProps> = ({
             {/* Files in Folder */}
             {isExpanded && (
               <div className="bg-gray-50">
-                {files.length === 0 ? (
+                {/* Current Files */}
+                {files.length === 0 && deleted.length === 0 ? (
                   <div className="px-8 py-2 text-xs text-gray-500 italic">No files</div>
                 ) : (
-                  fileTree.map((node) => renderFileNode(node, folder.id))
+                  <>
+                    {fileTree.map((node) => renderFileNode(node, folder.id, 0, false))}
+                    
+                    {/* Deleted Files Section */}
+                    {showDeletedFiles && deleted.length > 0 && (
+                      <>
+                        <div className="px-4 py-2 mt-2 border-t border-gray-300">
+                          <span className="text-xs font-semibold text-red-600 uppercase">Deleted Files</span>
+                        </div>
+                        {deletedTree.map((node) => renderFileNode(node, folder.id, 0, true))}
+                      </>
+                    )}
+                  </>
                 )}
               </div>
             )}

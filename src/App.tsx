@@ -11,7 +11,9 @@ function App() {
   const [selectedFolder, setSelectedFolder] = useState<WatchedFolder | null>(null);
   const [commits, setCommits] = useState<Commit[]>([]);
   const [allFiles, setAllFiles] = useState<string[]>([]);
-  const [allFoldersFiles, setAllFoldersFiles] = useState<Record<string, string[]>>({}); // New: files for all folders
+  const [allFoldersFiles, setAllFoldersFiles] = useState<Record<string, string[]>>({}); // Current files
+  const [allFoldersDeletedFiles, setAllFoldersDeletedFiles] = useState<Record<string, string[]>>({}); // Deleted files
+  const [showDeletedFiles, setShowDeletedFiles] = useState(false); // Toggle for showing deleted files
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
   const [fileCommits, setFileCommits] = useState<Commit[]>([]);
   const [selectedCommit, setSelectedCommit] = useState<Commit | null>(null);
@@ -179,38 +181,51 @@ function App() {
     const targetFolders = foldersToLoad || folders;
     
     const filesMap: Record<string, string[]> = {};
+    const deletedFilesMap: Record<string, string[]> = {};
+    
     for (const folder of targetFolders) {
       try {
-        const uniqueFiles = new Set<string>();
+        let realFiles: string[] = [];
         
-        // Get real files from file system (primary source)
+        // Get real files from file system (current state)
         if (window.electronAPI.listFolderFiles) {
           try {
-            const realFiles = await window.electronAPI.listFolderFiles(folder.path);
-            realFiles.forEach((file: string) => uniqueFiles.add(file));
+            realFiles = await window.electronAPI.listFolderFiles(folder.path);
+            filesMap[folder.id] = realFiles.sort();
           } catch (err) {
             console.warn(`Failed to list real files for folder ${folder.name}:`, err);
+            filesMap[folder.id] = [];
           }
+        } else {
+          filesMap[folder.id] = [];
         }
         
-        // Also include files from commit history (in case some files were deleted)
+        // Get deleted files (files in commit history but not in current file system)
         try {
           const loadedCommits = await window.electronAPI.getCommits(folder.id, 100);
+          const historicalFiles = new Set<string>();
+          
           loadedCommits.forEach((commit: Commit) => {
-            commit.changedFiles.forEach((file: string) => uniqueFiles.add(file));
+            commit.changedFiles.forEach((file: string) => historicalFiles.add(file));
           });
+          
+          // Deleted files = files in history but not in current file system
+          const currentFilesSet = new Set(realFiles);
+          const deletedFiles = Array.from(historicalFiles).filter(file => !currentFilesSet.has(file));
+          deletedFilesMap[folder.id] = deletedFiles.sort();
         } catch (err) {
           console.warn(`Failed to load commits for folder ${folder.name}:`, err);
+          deletedFilesMap[folder.id] = [];
         }
-        
-        filesMap[folder.id] = Array.from(uniqueFiles).sort();
       } catch (error) {
         console.error(`Failed to load files for folder ${folder.name}:`, error);
         filesMap[folder.id] = [];
+        deletedFilesMap[folder.id] = [];
       }
     }
     
     setAllFoldersFiles(filesMap);
+    setAllFoldersDeletedFiles(deletedFilesMap);
   };
   
 
@@ -353,32 +368,51 @@ function App() {
     setCompareCommit(null);
   };
 
-  const loadCurrentFileContent = async (filePath: string) => {
-    if (!selectedFolder) return;
+  const loadCurrentFileContent = async (filePath: string, folderId?: string) => {
+    const targetFolderId = folderId || selectedFolder?.id;
+    if (!targetFolderId) return;
     
     try {
       setLoading(true);
       
+      // Get fresh commits for this folder
+      const allCommits = await window.electronAPI.getCommits(targetFolderId, 100);
+      
       // Filter commits that contain this file
-      const commitsWithFile = commits.filter(commit => 
+      const commitsWithFile = allCommits.filter(commit => 
         commit.changedFiles.includes(filePath)
       );
       
+      // Set file commits for the versions panel
+      setFileCommits(commitsWithFile);
+      
       let content = '';
+      let isDeletedFile = false;
       
       if (commitsWithFile.length > 0) {
         // Get the latest version from Git (most recent commit)
         const latestCommit = commitsWithFile[0];
         content = await window.electronAPI.getFileContent(
-          selectedFolder.id,
+          targetFolderId,
           latestCommit.hash,
           filePath
         );
+        
+        // Check if file is deleted (exists in Git but not on disk)
+        const targetFolder = folders.find(f => f.id === targetFolderId);
+        if (targetFolder && window.electronAPI.readFileFromDisk) {
+          const diskResult = await window.electronAPI.readFileFromDisk(
+            targetFolder.path,
+            filePath
+          );
+          isDeletedFile = !diskResult.success;
+        }
       } else {
         // No commits yet - read file directly from disk
-        if (window.electronAPI.readFileFromDisk) {
+        const targetFolder = folders.find(f => f.id === targetFolderId);
+        if (targetFolder && window.electronAPI.readFileFromDisk) {
           const result = await window.electronAPI.readFileFromDisk(
-            selectedFolder.path,
+            targetFolder.path,
             filePath
           );
           if (result.success && result.content) {
@@ -398,8 +432,8 @@ function App() {
         oldContent: content,
         newContent: content,
         fileName: filePath.split('/').pop() || filePath,
-        oldCommit: 'current',
-        newCommit: 'current'
+        oldCommit: isDeletedFile ? 'deleted' : 'current',
+        newCommit: isDeletedFile ? 'deleted' : 'current'
       });
     } catch (error) {
       console.error('Failed to load file content:', error);
@@ -420,19 +454,19 @@ function App() {
         await loadCommits(folderId);
       }
     }
+    
+    // Ensure commits are loaded for the current folder
+    // (in case folder was expanded but not selected)
+    if (commits.length === 0 && targetFolderId) {
+      await loadCommits(targetFolderId);
+    }
 
     setSelectedFile(filePath);
     setSelectedCommit(null);
     setCompareCommit(null);
     
-    // Filter commits that contain this file
-    const commitsWithFile = commits.filter(commit => 
-      commit.changedFiles.includes(filePath)
-    );
-    setFileCommits(commitsWithFile);
-    
-    // Show current file content immediately
-    await loadCurrentFileContent(filePath);
+    // Load file content (this will also load commits and filter them)
+    await loadCurrentFileContent(filePath, targetFolderId);
   };
 
   const handleSelectCommit = async (commit: Commit) => {
@@ -583,7 +617,7 @@ function App() {
       {/* Left Sidebar - Folders and Files */}
       <div className="w-80 bg-white border-r border-gray-200 flex flex-col">
         <div className="p-4 border-b border-gray-200 flex justify-between items-center">
-          <h1 className="text-lg font-semibold">Folders & Files</h1>
+          <h1 className="text-lg font-semibold">Folders Watched</h1>
           <div className="flex gap-2">
             <button
               onClick={() => handleRemoveFolder()}
@@ -617,14 +651,31 @@ function App() {
           </div>
         </div>
         
-        <FolderFileTree
-          folders={folders}
-          allFiles={allFoldersFiles}
-          selectedFolder={selectedFolder}
-          selectedFile={selectedFile}
-          onSelectFolder={handleSelectFolder}
-          onSelectFile={(folderId, filePath) => handleSelectFile(filePath, folderId)}
-        />
+        <div className="flex-1 overflow-auto">
+          <FolderFileTree
+            folders={folders}
+            allFiles={allFoldersFiles}
+            deletedFiles={allFoldersDeletedFiles}
+            showDeletedFiles={showDeletedFiles}
+            selectedFolder={selectedFolder}
+            selectedFile={selectedFile}
+            onSelectFolder={handleSelectFolder}
+            onSelectFile={(folderId, filePath) => handleSelectFile(filePath, folderId)}
+          />
+        </div>
+        
+        {/* Show Deleted Files Checkbox */}
+        <div className="p-3 border-t border-gray-200 bg-gray-50">
+          <label className="flex items-center gap-2 text-sm cursor-pointer">
+            <input
+              type="checkbox"
+              checked={showDeletedFiles}
+              onChange={(e) => setShowDeletedFiles(e.target.checked)}
+              className="rounded border-gray-300"
+            />
+            <span className="text-gray-700">Show deleted files</span>
+          </label>
+        </div>
       </div>
 
       {/* Main Content Area - 2 Columns */}
@@ -689,8 +740,8 @@ function App() {
                     // Show current version of the file
                     setSelectedCommit(null);
                     setCompareCommit(null);
-                    if (selectedFile) {
-                      await loadCurrentFileContent(selectedFile);
+                    if (selectedFile && selectedFolder) {
+                      await loadCurrentFileContent(selectedFile, selectedFolder.id);
                     }
                   }}
                   loading={loading}

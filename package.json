@@ -56,8 +56,13 @@
       "icon": "build/icon.icns"
     },
     "files": [
-      "dist/**/*",
-      "package.json"
+      "dist/electron/**/*",
+      "dist/renderer/**/*",
+      "package.json",
+      "!dist/mac-arm64/**/*",
+      "!dist/*.dmg",
+      "!dist/*.blockmap",
+      "!dist/*.yml"
     ],
     "extraResources": [
       {
