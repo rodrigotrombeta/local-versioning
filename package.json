@@ -1,0 +1,69 @@
+{
+  "name": "local-versioning",
+  "version": "1.0.0",
+  "description": "Local version control application with Git-based file tracking",
+  "main": "dist/electron/main.js",
+  "scripts": {
+    "dev": "concurrently \"npm run dev:react\" \"npm run dev:electron\"",
+    "dev:react": "vite",
+    "dev:electron": "wait-on http://localhost:5173 && tsc -p electron && cross-env VITE_DEV_SERVER_URL=http://localhost:5173 electron .",
+    "build": "tsc -p electron && vite build",
+    "build:electron": "electron-builder",
+    "type-check": "tsc --noEmit"
+  },
+  "keywords": [
+    "version-control",
+    "git",
+    "electron",
+    "backup"
+  ],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "@types/react": "^18.2.42",
+    "@types/react-dom": "^18.2.17",
+    "@vitejs/plugin-react": "^4.2.1",
+    "autoprefixer": "^10.4.16",
+    "concurrently": "^8.2.2",
+    "cross-env": "^7.0.3",
+    "electron": "^28.0.0",
+    "electron-builder": "^24.9.1",
+    "postcss": "^8.4.32",
+    "tailwindcss": "^3.3.6",
+    "typescript": "^5.3.3",
+    "vite": "^5.0.7",
+    "wait-on": "^7.2.0"
+  },
+  "dependencies": {
+    "@tailwindcss/typography": "0.5.19",
+    "@types/react-syntax-highlighter": "15.5.13",
+    "chokidar": "^3.5.3",
+    "react": "^18.2.0",
+    "react-diff-viewer-continued": "^3.3.1",
+    "react-dom": "^18.2.0",
+    "react-markdown": "10.1.0",
+    "react-syntax-highlighter": "15.6.6",
+    "remark-gfm": "4.0.1",
+    "simple-git": "^3.20.0"
+  },
+  "build": {
+    "appId": "com.localversioning.app",
+    "productName": "Local Versioning",
+    "mac": {
+      "category": "public.app-category.developer-tools",
+      "target": "dmg",
+      "icon": "build/icon.icns"
+    },
+    "files": [
+      "dist/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "build/icon.png",
+        "to": "icon.png"
+      }
+    ]
+  }
+}
