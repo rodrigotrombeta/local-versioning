@@ -63,6 +63,18 @@ function App() {
     }
   }, [folders.length]);
   
+  // Periodically refresh file list for selected folder (to catch new files)
+  useEffect(() => {
+    if (!selectedFolder) return;
+    
+    // Refresh every 5 seconds
+    const intervalId = setInterval(() => {
+      loadAllFoldersFiles();
+    }, 5000);
+    
+    return () => clearInterval(intervalId);
+  }, [selectedFolder]);
+  
   // Listen for file changes from the main process (auto-refresh)
   useEffect(() => {
     if (!autoRefresh || !selectedFolder) return;
@@ -72,6 +84,9 @@ function App() {
       if (selectedFolder && selectedFolder.id === folderId) {
         console.log('Auto-refreshing commits...');
         loadCommits(folderId);
+        
+        // Also reload the file list to show newly added files
+        loadAllFoldersFiles();
       }
     };
     
