@@ -387,6 +387,61 @@ ipcMain.handle('create-file', async (_event, folderPath: string, fileName: strin
   }
 });
 
+// List all files in a folder recursively
+ipcMain.handle('list-folder-files', async (_event, folderPath: string) => {
+  try {
+    const files: string[] = [];
+    
+    const ignorePatterns = [
+      'node_modules',
+      '.git',
+      '.DS_Store',
+      '.tmp',
+      '.log',
+      'dist',
+      'build',
+      '.next',
+      '.cache'
+    ];
+    
+    function shouldIgnore(fileName: string): boolean {
+      return ignorePatterns.some(pattern => fileName.includes(pattern));
+    }
+    
+    function walkDir(dir: string, baseDir: string = dir) {
+      try {
+        const entries = fs.readdirSync(dir, { withFileTypes: true });
+        
+        for (const entry of entries) {
+          const fullPath = path.join(dir, entry.name);
+          const relativePath = path.relative(baseDir, fullPath);
+          
+          if (shouldIgnore(entry.name) || shouldIgnore(relativePath)) {
+            continue;
+          }
+          
+          if (entry.isDirectory()) {
+            walkDir(fullPath, baseDir);
+          } else if (entry.isFile()) {
+            files.push(relativePath);
+          }
+        }
+      } catch (err) {
+        console.warn('Error reading directory:', dir, err);
+      }
+    }
+    
+    if (fs.existsSync(folderPath)) {
+      walkDir(folderPath);
+    }
+    
+    return files.sort();
+  } catch (error) {
+    console.error('Error listing folder files:', error);
+    return [];
+  }
+});
+
 // Detect existing Git repository for a folder
 ipcMain.handle('detect-existing-git-repository', async (_event, folderPath: string, folderName: string) => {
   console.log(`Detecting existing Git repository for: ${folderPath}`);

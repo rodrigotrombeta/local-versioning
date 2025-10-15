@@ -165,11 +165,28 @@ function App() {
     const filesMap: Record<string, string[]> = {};
     for (const folder of folders) {
       try {
-        const loadedCommits = await window.electronAPI.getCommits(folder.id, 100);
         const uniqueFiles = new Set<string>();
-        loadedCommits.forEach((commit: Commit) => {
-          commit.changedFiles.forEach((file: string) => uniqueFiles.add(file));
-        });
+        
+        // Get real files from file system (primary source)
+        if (window.electronAPI.listFolderFiles) {
+          try {
+            const realFiles = await window.electronAPI.listFolderFiles(folder.path);
+            realFiles.forEach((file: string) => uniqueFiles.add(file));
+          } catch (err) {
+            console.warn(`Failed to list real files for folder ${folder.name}:`, err);
+          }
+        }
+        
+        // Also include files from commit history (in case some files were deleted)
+        try {
+          const loadedCommits = await window.electronAPI.getCommits(folder.id, 100);
+          loadedCommits.forEach((commit: Commit) => {
+            commit.changedFiles.forEach((file: string) => uniqueFiles.add(file));
+          });
+        } catch (err) {
+          console.warn(`Failed to load commits for folder ${folder.name}:`, err);
+        }
+        
         filesMap[folder.id] = Array.from(uniqueFiles).sort();
       } catch (error) {
         console.error(`Failed to load files for folder ${folder.name}:`, error);

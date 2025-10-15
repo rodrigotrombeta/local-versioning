@@ -72,6 +72,7 @@ export interface ElectronAPI {
   fileExists: (folderPath: string, filePath: string) => Promise<boolean>;
   saveFile?: (folderPath: string, filePath: string, content: string) => Promise<{ success: boolean; error?: string }>;
   createFile?: (folderPath: string, fileName: string) => Promise<{ success: boolean; error?: string }>;
+  listFolderFiles?: (folderPath: string) => Promise<string[]>;
   
   // Git repository migration
   migrateGitRepository: (folderId: string, newGitPath: string) => Promise<{ success: boolean; error?: string }>;

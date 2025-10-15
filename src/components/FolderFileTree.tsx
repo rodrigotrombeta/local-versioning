@@ -27,6 +27,18 @@ const FolderFileTree: React.FC<FolderFileTreeProps> = ({
 }) => {
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set());
 
+  // Sort nodes: directories first (alphabetically), then files (alphabetically)
+  const sortFileNodes = (nodes: FileNode[]): FileNode[] => {
+    return nodes.sort((a, b) => {
+      // Directories come before files
+      if (a.isDirectory && !b.isDirectory) return -1;
+      if (!a.isDirectory && b.isDirectory) return 1;
+      
+      // Within same type, sort alphabetically (case-insensitive)
+      return a.name.toLowerCase().localeCompare(b.name.toLowerCase());
+    });
+  };
+
   // Build tree structure from flat file list
   const buildFileTree = (files: string[]): FileNode[] => {
     const root: FileNode[] = [];
@@ -63,6 +75,17 @@ const FolderFileTree: React.FC<FolderFileTreeProps> = ({
       });
     });
 
+    // Sort all nodes recursively
+    const sortRecursively = (nodes: FileNode[]) => {
+      sortFileNodes(nodes);
+      nodes.forEach(node => {
+        if (node.children) {
+          sortRecursively(node.children);
+        }
+      });
+    };
+    
+    sortRecursively(root);
     return root;
   };
 
