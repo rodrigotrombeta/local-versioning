@@ -13,6 +13,7 @@ interface FolderFileTreeProps {
   allFiles: Record<string, string[]>; // folderId -> current file paths
   deletedFiles: Record<string, string[]>; // folderId -> deleted file paths
   showDeletedFiles: boolean;
+  fileVersionCounts: Record<string, Record<string, number>>; // folderId -> filePath -> version count
   selectedFolder: WatchedFolder | null;
   selectedFile: string | null;
   onSelectFolder: (folder: WatchedFolder) => void;
@@ -24,6 +25,7 @@ const FolderFileTree: React.FC<FolderFileTreeProps> = ({
   allFiles,
   deletedFiles,
   showDeletedFiles,
+  fileVersionCounts,
   selectedFolder,
   selectedFile,
   onSelectFolder,
@@ -155,6 +157,9 @@ const FolderFileTree: React.FC<FolderFileTreeProps> = ({
         </div>
       );
     } else {
+      // Get version count for this file
+      const versionCount = fileVersionCounts[folderId]?.[node.path] || 0;
+      
       return (
         <div
           key={node.path}
@@ -168,7 +173,7 @@ const FolderFileTree: React.FC<FolderFileTreeProps> = ({
           }`}
           style={{ paddingLeft: `${depth * 12 + 20}px` }}
         >
-          <svg className={`w-4 h-4 ${isDeleted ? 'text-red-400' : 'text-gray-400'}`} fill="currentColor" viewBox="0 0 20 20">
+          <svg className={`w-4 h-4 flex-shrink-0 ${isDeleted ? 'text-red-400' : 'text-gray-400'}`} fill="currentColor" viewBox="0 0 20 20">
             <path
               fillRule="evenodd"
               d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z"
@@ -176,6 +181,28 @@ const FolderFileTree: React.FC<FolderFileTreeProps> = ({
             />
           </svg>
           <span className={`truncate ${isDeleted ? 'line-through' : ''}`}>{node.name}</span>
+          
+          {/* Version badge */}
+          <span className={`flex items-center gap-1 ml-auto flex-shrink-0 text-xs ${
+            versionCount > 0 ? 'text-gray-500' : 'text-gray-400'
+          }`}>
+            {versionCount > 0 ? (
+              // Clock icon for files with history
+              <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd" />
+              </svg>
+            ) : (
+              // Empty circle for files without history
+              <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 20 20">
+                <circle cx="10" cy="10" r="7" />
+              </svg>
+            )}
+            <span className={`px-1.5 py-0.5 rounded font-medium ${
+              versionCount > 0 ? 'bg-gray-200 text-gray-700' : 'bg-gray-100 text-gray-400'
+            }`}>
+              {versionCount}
+            </span>
+          </span>
         </div>
       );
     }

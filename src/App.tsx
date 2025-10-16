@@ -14,6 +14,7 @@ function App() {
   const [allFoldersFiles, setAllFoldersFiles] = useState<Record<string, string[]>>({}); // Current files
   const [allFoldersDeletedFiles, setAllFoldersDeletedFiles] = useState<Record<string, string[]>>({}); // Deleted files
   const [showDeletedFiles, setShowDeletedFiles] = useState(false); // Toggle for showing deleted files
+  const [fileVersionCounts, setFileVersionCounts] = useState<Record<string, Record<string, number>>>({}); // folderId -> filePath -> version count
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
   const [fileCommits, setFileCommits] = useState<Commit[]>([]);
   const [selectedCommit, setSelectedCommit] = useState<Commit | null>(null);
@@ -204,14 +205,26 @@ function App() {
       
       setCommits(loadedCommits);
       
-      // Extract all unique files from all commits
+      // Extract all unique files from all commits AND count versions
       const uniqueFiles = new Set<string>();
+      const versionCounts: Record<string, number> = {};
+      
       loadedCommits.forEach(commit => {
-        commit.changedFiles.forEach(file => uniqueFiles.add(file));
+        commit.changedFiles.forEach(file => {
+          uniqueFiles.add(file);
+          versionCounts[file] = (versionCounts[file] || 0) + 1;
+        });
       });
+      
       const filesArray = Array.from(uniqueFiles).sort();
       console.log('All unique files for this folder:', filesArray);
       setAllFiles(filesArray);
+      
+      // Update version counts for this folder
+      setFileVersionCounts(prev => ({
+        ...prev,
+        [folderId]: versionCounts
+      }));
       
       // Note: Don't update allFoldersFiles here - it's managed by loadAllFoldersFiles()
       // which reads from the file system directly, not just from commits
@@ -688,6 +701,52 @@ function App() {
     }
   };
 
+  const handleCleanupVersions = async (folderId: string, filePath: string) => {
+    try {
+      setLoading(true);
+      
+      // Get all commits for this file
+      const allCommits = await window.electronAPI.getCommits(folderId, 1000);
+      const fileCommitsAll = allCommits.filter(commit => 
+        commit.changedFiles.includes(filePath)
+      );
+      
+      if (fileCommitsAll.length <= 10) {
+        alert(`This file only has ${fileCommitsAll.length} version(s). No cleanup needed.`);
+        return;
+      }
+      
+      // Keep only the 10 most recent commits
+      const commitsToKeep = fileCommitsAll.slice(0, 10).map(c => c.hash);
+      const commitsToDelete = fileCommitsAll.slice(10).map(c => c.hash);
+      
+      console.log(`Cleaning up ${commitsToDelete.length} old versions, keeping ${commitsToKeep.length}`);
+      
+      // Call the backend to delete old commits
+      // Note: This requires implementing a new IPC handler
+      if (window.electronAPI.cleanupCommits) {
+        await window.electronAPI.cleanupCommits(folderId, filePath, commitsToDelete);
+        
+        // Reload commits
+        await loadCommits(folderId);
+        
+        // Reload current file content
+        if (selectedFile && selectedFolder) {
+          await loadCurrentFileContent(selectedFile, selectedFolder.id);
+        }
+        
+        alert(`Successfully cleaned up ${commitsToDelete.length} old version(s).`);
+      } else {
+        alert('Cleanup feature not yet available. Backend implementation required.');
+      }
+    } catch (error) {
+      console.error('Failed to cleanup versions:', error);
+      alert('Failed to cleanup versions. See console for details.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const rightPanelWidth = 100 - leftPanelWidth - centerPanelWidth;
   
   return (
@@ -738,6 +797,7 @@ function App() {
             allFiles={allFoldersFiles}
             deletedFiles={allFoldersDeletedFiles}
             showDeletedFiles={showDeletedFiles}
+            fileVersionCounts={fileVersionCounts}
             selectedFolder={selectedFolder}
             selectedFile={selectedFile}
             onSelectFolder={handleSelectFolder}
@@ -825,13 +885,37 @@ function App() {
                 className="flex flex-col bg-gray-50 overflow-hidden"
                 style={{ width: `${(rightPanelWidth / (centerPanelWidth + rightPanelWidth)) * 100}%` }}
               >
-                <div className="p-3 border-b border-gray-200 bg-white">
-                  <h2 className="text-sm font-semibold text-gray-700">Versions</h2>
-                  {selectedFile && (
-                    <p className="text-xs text-gray-500 truncate mt-1" title={selectedFile}>
-                      {selectedFile.split('/').pop()}
-                    </p>
-                  )}
+                <div className="p-3 border-b border-gray-200 bg-white flex items-start justify-between">
+                  <div className="flex-1 min-w-0">
+                    <h2 className="text-sm font-semibold text-gray-700">Versions</h2>
+                    {selectedFile && (
+                      <p className="text-xs text-gray-500 truncate mt-1" title={selectedFile}>
+                        {selectedFile.split('/').pop()}
+                      </p>
+                    )}
+                  </div>
+                  
+                  {/* Cleanup button */}
+                  <button
+                    onClick={() => {
+                      if (selectedFolder && selectedFile) {
+                        const confirmCleanup = window.confirm(
+                          `Clean up old versions of "${selectedFile.split('/').pop()}"?\n\n` +
+                          `This will keep only the 10 most recent versions and delete all older ones.\n\n` +
+                          `This action cannot be undone.`
+                        );
+                        if (confirmCleanup) {
+                          handleCleanupVersions(selectedFolder.id, selectedFile);
+                        }
+                      }
+                    }}
+                    className="text-gray-500 hover:text-red-600 p-1 rounded hover:bg-gray-100"
+                    title="Cleanup old versions"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                    </svg>
+                  </button>
                 </div>
                 
                 <CommitHistory

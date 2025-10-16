@@ -272,6 +272,11 @@ ipcMain.handle('restore-file', async (_event, folderId: string, filePath: string
   await gitService.restoreFile(filePath, commitHash);
 });
 
+ipcMain.handle('cleanup-commits', async (_event, folderId: string, filePath: string, commitsToDelete: string[]) => {
+  const gitService = getOrCreateGitService(folderId);
+  await gitService.cleanupOldCommits(filePath, commitsToDelete);
+});
+
 // File watching
 ipcMain.handle('start-watching', async (_event, folderId: string) => {
   await startWatchingFolder(folderId);

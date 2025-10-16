@@ -56,6 +56,7 @@ export interface ElectronAPI {
   getFileContent: (folderId: string, commitHash: string, filePath: string) => Promise<string>;
   getDiff: (folderId: string, filePath: string, oldCommit: string, newCommit?: string) => Promise<DiffResult>;
   restoreFile: (folderId: string, filePath: string, commitHash: string) => Promise<void>;
+  cleanupCommits?: (folderId: string, filePath: string, commitsToDelete: string[]) => Promise<void>;
   
   // File watching
   startWatching: (folderId: string) => Promise<void>;

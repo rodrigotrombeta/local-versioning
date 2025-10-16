@@ -372,6 +372,40 @@ export class GitService {
     }
   }
   
+  async cleanupOldCommits(filePath: string, commitsToDelete: string[]): Promise<void> {
+    try {
+      console.log(`Cleaning up ${commitsToDelete.length} commits for file: ${filePath}`);
+      
+      // Git doesn't easily allow deleting specific commits
+      // Instead, we'll use interactive rebase to remove them
+      // WARNING: This is a destructive operation!
+      
+      // For now, we'll use a simpler approach: create a new branch without the old commits
+      // and replace the main branch with it
+      
+      // Get the oldest commit to delete
+      const oldestCommitToDelete = commitsToDelete[commitsToDelete.length - 1];
+      
+      // Get all commits
+      const allCommits = await this.getCommits(1000);
+      
+      // Filter out commits to delete
+      const commitsToKeep = allCommits.filter(c => !commitsToDelete.includes(c.hash));
+      
+      console.log(`Keeping ${commitsToKeep.length} commits, deleting ${commitsToDelete.length}`);
+      
+      // Note: Actual implementation would require git filter-branch or git rebase
+      // This is complex and can break repository history
+      // For MVP, we'll just log a warning
+      
+      throw new Error('Commit cleanup not yet fully implemented. This requires git filter-branch or interactive rebase.');
+      
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      throw new Error(`Failed to cleanup commits: ${errorMessage}`);
+    }
+  }
+  
   async hasUncommittedChanges(): Promise<boolean> {
     try {
       const status = await this.git.status();
