@@ -27,6 +27,52 @@ function App() {
   const [showMigration, setShowMigration] = useState(false);
   const [showNewFileDialog, setShowNewFileDialog] = useState(false);
   const [newFileName, setNewFileName] = useState('');
+  
+  // Resizable panels: widths in percentages
+  const [leftPanelWidth, setLeftPanelWidth] = useState(20); // 20%
+  const [centerPanelWidth, setCenterPanelWidth] = useState(50); // 50%
+  // Right panel gets the remainder (30%)
+  
+  const handleLeftResize = (e: React.MouseEvent) => {
+    e.preventDefault();
+    const startX = e.clientX;
+    const startWidth = leftPanelWidth;
+    
+    const handleMouseMove = (moveEvent: MouseEvent) => {
+      const delta = ((moveEvent.clientX - startX) / window.innerWidth) * 100;
+      const newWidth = Math.max(10, Math.min(40, startWidth + delta)); // Min 10%, Max 40%
+      setLeftPanelWidth(newWidth);
+    };
+    
+    const handleMouseUp = () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+    
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+  };
+  
+  const handleCenterResize = (e: React.MouseEvent) => {
+    e.preventDefault();
+    const startX = e.clientX;
+    const startWidth = centerPanelWidth;
+    
+    const handleMouseMove = (moveEvent: MouseEvent) => {
+      const delta = ((moveEvent.clientX - startX) / window.innerWidth) * 100;
+      const newWidth = Math.max(20, Math.min(70, startWidth + delta)); // Min 20%, Max 70%
+      setCenterPanelWidth(newWidth);
+    };
+    
+    const handleMouseUp = () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+    
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+  };
+  
   const [reconnectDialog, setReconnectDialog] = useState<{
     folderName: string;
     location: string;
@@ -642,10 +688,15 @@ function App() {
     }
   };
 
+  const rightPanelWidth = 100 - leftPanelWidth - centerPanelWidth;
+  
   return (
     <div className="flex h-screen bg-gray-100">
       {/* Left Sidebar - Folders and Files */}
-      <div className="w-80 bg-white border-r border-gray-200 flex flex-col">
+      <div 
+        className="bg-white border-r border-gray-200 flex flex-col overflow-hidden"
+        style={{ width: `${leftPanelWidth}%` }}
+      >
         <div className="p-4 border-b border-gray-200 flex justify-between items-center">
           <h1 className="text-lg font-semibold">Folders Watched</h1>
           <div className="flex gap-2">
@@ -707,15 +758,28 @@ function App() {
           </label>
         </div>
       </div>
+      
+      {/* Left Resizer */}
+      <div 
+        className="w-1 bg-gray-300 hover:bg-blue-500 cursor-col-resize flex-shrink-0"
+        onMouseDown={handleLeftResize}
+        title="Drag to resize"
+      />
 
       {/* Main Content Area - 2 Columns */}
-      <div className="flex-1 flex flex-col">
+      <div 
+        className="flex flex-col overflow-hidden"
+        style={{ width: `${centerPanelWidth + rightPanelWidth}%` }}
+      >
         {selectedFolder && selectedFile ? (
           <>
             {/* 2-Column Layout: Editor (Center) + Versions (Right) */}
             <div className="flex flex-1 overflow-hidden">
-              {/* Center Panel - Editor (larger) */}
-              <div className="flex-1 border-r border-gray-200 flex flex-col bg-white">
+              {/* Center Panel - Editor */}
+              <div 
+                className="border-r border-gray-200 flex flex-col bg-white overflow-hidden"
+                style={{ width: `${(centerPanelWidth / (centerPanelWidth + rightPanelWidth)) * 100}%` }}
+              >
                 {diffResult ? (
                   <DiffViewer 
                     diffResult={diffResult} 
@@ -748,9 +812,19 @@ function App() {
                   </div>
                 )}
               </div>
+              
+              {/* Center Resizer */}
+              <div 
+                className="w-1 bg-gray-300 hover:bg-blue-500 cursor-col-resize flex-shrink-0"
+                onMouseDown={handleCenterResize}
+                title="Drag to resize"
+              />
 
-              {/* Right Panel - Versions (thin strip) */}
-              <div className="w-64 flex flex-col bg-gray-50">
+              {/* Right Panel - Versions */}
+              <div 
+                className="flex flex-col bg-gray-50 overflow-hidden"
+                style={{ width: `${(rightPanelWidth / (centerPanelWidth + rightPanelWidth)) * 100}%` }}
+              >
                 <div className="p-3 border-b border-gray-200 bg-white">
                   <h2 className="text-sm font-semibold text-gray-700">Versions</h2>
                   {selectedFile && (
