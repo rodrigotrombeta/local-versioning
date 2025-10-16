@@ -73,16 +73,25 @@ The menu bar icon provides quick access:
 
 ## Troubleshooting
 
+### "App is damaged and can't be opened"
+
+This error appears when downloading the app from GitHub because it's not signed with an Apple Developer certificate ($99/year).
+
+**Fix:** Remove the quarantine flag by running in Terminal:
+
+```bash
+xattr -d com.apple.quarantine "/Applications/Local Versioning.app"
+```
+
+After this, the app will open normally.
+
 ### "App can't be opened because it's from an unidentified developer"
 
-This is macOS Gatekeeper security. To open:
+If you see this instead (less common), use one of these methods:
 
-1. Right-click the app → select "Open"
-2. Click "Open" in the confirmation dialog
+**Option 1:** Right-click the app → select "Open" → Click "Open" in the confirmation dialog
 
-Or:
-1. Go to System Preferences → Security & Privacy → General
-2. Click "Open Anyway"
+**Option 2:** System Preferences → Security & Privacy → General → Click "Open Anyway"
 
 ### Permission Issues
 
@@ -130,6 +139,32 @@ When you make code changes:
 5. Publish the release
 
 Users can then download the DMG directly from GitHub.
+
+### Code Signing (Optional)
+
+To avoid the "damaged app" error for users, you need an Apple Developer account ($99/year) and a "Developer ID Application" certificate.
+
+**With a certificate:**
+
+1. Get your signing identity:
+   ```bash
+   security find-identity -v -p codesigning
+   ```
+
+2. Update `package.json` to include your identity:
+   ```json
+   "build": {
+     "mac": {
+       "identity": "Developer ID Application: Your Name (TEAM_ID)"
+     }
+   }
+   ```
+
+3. Build normally - electron-builder will sign automatically
+
+**Notarization (for full distribution):**
+
+Notarization requires additional Apple credentials and is beyond the scope of this guide. See [electron-builder docs](https://www.electron.build/code-signing) for details.
 
 ## Development Mode
 

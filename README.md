@@ -72,6 +72,18 @@ Or download from [nodejs.org](https://nodejs.org/)
 3. Drag "Local Versioning" to your Applications folder
 4. Launch from Applications or Spotlight (Cmd+Space, type "Local Versioning")
 
+#### "App is damaged and can't be opened" Error
+
+If you see this error, it's because the app is not signed with an Apple Developer certificate. This is a macOS security feature, not an actual problem with the app.
+
+To fix this, open Terminal and run:
+
+```bash
+xattr -d com.apple.quarantine "/Applications/Local Versioning.app"
+```
+
+This removes the quarantine flag that macOS adds to downloaded files. After running this command, you can open the app normally.
+
 ### For Developers
 
 Clone and setup:
