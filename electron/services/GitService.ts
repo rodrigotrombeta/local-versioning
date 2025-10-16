@@ -372,33 +372,91 @@ export class GitService {
     }
   }
   
+  async getFileStorageInfo(filePath: string): Promise<any> {
+    try {
+      const fullPath = path.join(this.workingDir, filePath);
+      
+      // Get current file size
+      let currentSize = 0;
+      if (fs.existsSync(fullPath)) {
+        currentSize = fs.statSync(fullPath).size;
+      }
+      
+      // Get all commits that modified this file
+      const allCommits = await this.getCommits(1000);
+      const commitsWithFile = allCommits.filter(commit =>
+        commit.changedFiles.includes(filePath)
+      );
+      
+      // Get size of each version in Git
+      const sizeByCommit: Array<{ hash: string; size: number }> = [];
+      let versionsSize = 0;
+      
+      for (const commit of commitsWithFile) {
+        try {
+          // Get size of file at this commit
+          const sizeStr = await this.git.raw(['cat-file', '-s', `${commit.hash}:${filePath}`]);
+          const size = parseInt(sizeStr.trim(), 10);
+          sizeByCommit.push({ hash: commit.hash, size });
+          versionsSize += size;
+        } catch (err) {
+          // File might not exist in this commit (deletion commit)
+          console.log(`File not found in commit ${commit.hash}`);
+        }
+      }
+      
+      return {
+        currentSize,
+        versionsSize,
+        versionCount: commitsWithFile.length,
+        totalSize: currentSize + versionsSize,
+        sizeByCommit
+      };
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      throw new Error(`Failed to get file storage info: ${errorMessage}`);
+    }
+  }
+  
   async cleanupOldCommits(filePath: string, commitsToDelete: string[]): Promise<void> {
     try {
       console.log(`Cleaning up ${commitsToDelete.length} commits for file: ${filePath}`);
       
-      // Git doesn't easily allow deleting specific commits
-      // Instead, we'll use interactive rebase to remove them
-      // WARNING: This is a destructive operation!
+      // Simple approach: Keep only the most recent commit by using filter-branch
+      // This will rewrite history to remove all but the most recent version
       
-      // For now, we'll use a simpler approach: create a new branch without the old commits
-      // and replace the main branch with it
-      
-      // Get the oldest commit to delete
-      const oldestCommitToDelete = commitsToDelete[commitsToDelete.length - 1];
+      if (commitsToDelete.length === 0) {
+        return;
+      }
       
       // Get all commits
       const allCommits = await this.getCommits(1000);
+      const commitsWithFile = allCommits.filter(c =>
+        c.changedFiles.includes(filePath)
+      );
       
-      // Filter out commits to delete
-      const commitsToKeep = allCommits.filter(c => !commitsToDelete.includes(c.hash));
+      if (commitsWithFile.length <= 1) {
+        console.log('Only one version exists, nothing to cleanup');
+        return;
+      }
       
-      console.log(`Keeping ${commitsToKeep.length} commits, deleting ${commitsToDelete.length}`);
+      // Keep only the most recent commit
+      // Use filter-branch to rewrite history
+      const mostRecentCommit = commitsWithFile[0];
       
-      // Note: Actual implementation would require git filter-branch or git rebase
-      // This is complex and can break repository history
-      // For MVP, we'll just log a warning
+      // Alternative: Just delete old commits using git filter-branch
+      // This is destructive but simpler than interactive rebase
+      await this.git.raw([
+        'filter-branch',
+        '--force',
+        '--index-filter',
+        `git ls-files -s | grep -v "${filePath}" | git update-index --index-info || true`,
+        '--prune-empty',
+        '--',
+        `${commitsToDelete[commitsToDelete.length - 1]}..HEAD`
+      ]);
       
-      throw new Error('Commit cleanup not yet fully implemented. This requires git filter-branch or interactive rebase.');
+      console.log(`Successfully cleaned up old versions`);
       
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);

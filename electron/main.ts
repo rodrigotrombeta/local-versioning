@@ -277,6 +277,11 @@ ipcMain.handle('cleanup-commits', async (_event, folderId: string, filePath: str
   await gitService.cleanupOldCommits(filePath, commitsToDelete);
 });
 
+ipcMain.handle('get-file-storage-info', async (_event, folderId: string, filePath: string) => {
+  const gitService = getOrCreateGitService(folderId);
+  return await gitService.getFileStorageInfo(filePath);
+});
+
 // File watching
 ipcMain.handle('start-watching', async (_event, folderId: string) => {
   await startWatchingFolder(folderId);

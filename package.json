@@ -1,6 +1,6 @@
 {
   "name": "local-versioning",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Local version control application with Git-based file tracking",
   "main": "dist/electron/main.js",
   "scripts": {

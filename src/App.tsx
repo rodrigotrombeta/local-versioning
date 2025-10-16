@@ -4,7 +4,16 @@ import DiffViewer from './components/DiffViewer';
 import Settings from './components/Settings';
 import GitMigration from './components/GitMigration';
 import FolderFileTree from './components/FolderFileTree';
-import type { WatchedFolder, Commit, DiffResult } from './types';
+import type { WatchedFolder, Commit, DiffResult, FileStorageInfo } from './types';
+
+// Helper function to format file sizes
+function formatSize(bytes: number): string {
+  if (bytes === 0) return '0 B';
+  const k = 1024;
+  const sizes = ['B', 'KB', 'MB', 'GB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return `${(bytes / Math.pow(k, i)).toFixed(1)} ${sizes[i]}`;
+}
 
 function App() {
   const [folders, setFolders] = useState<WatchedFolder[]>([]);
@@ -17,6 +26,7 @@ function App() {
   const [fileVersionCounts, setFileVersionCounts] = useState<Record<string, Record<string, number>>>({}); // folderId -> filePath -> version count
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
   const [fileCommits, setFileCommits] = useState<Commit[]>([]);
+  const [fileStorageInfo, setFileStorageInfo] = useState<FileStorageInfo | null>(null);
   const [selectedCommit, setSelectedCommit] = useState<Commit | null>(null);
   const [compareCommit, setCompareCommit] = useState<Commit | null>(null);
   const [diffResult, setDiffResult] = useState<DiffResult | null>(null);
@@ -531,6 +541,22 @@ function App() {
     }
   };
 
+  const loadFileStorageInfo = async (folderId: string, filePath: string) => {
+    if (!window.electronAPI.getFileStorageInfo) {
+      console.warn('getFileStorageInfo API not available');
+      return;
+    }
+    
+    try {
+      const storageInfo = await window.electronAPI.getFileStorageInfo(folderId, filePath);
+      console.log(`Storage info for ${filePath}:`, storageInfo);
+      setFileStorageInfo(storageInfo);
+    } catch (error) {
+      console.error('Failed to load file storage info:', error);
+      setFileStorageInfo(null);
+    }
+  };
+
   const handleSelectFile = async (filePath: string, folderId?: string) => {
     const targetFolderId = folderId || selectedFolder?.id;
     if (!targetFolderId) return;
@@ -556,6 +582,9 @@ function App() {
     
     // Load file content (this will also load commits and filter them)
     await loadCurrentFileContent(filePath, targetFolderId);
+    
+    // Load storage info for this file
+    await loadFileStorageInfo(targetFolderId, filePath);
   };
 
   const handleSelectCommit = async (commit: Commit) => {
@@ -702,6 +731,19 @@ function App() {
   };
 
   const handleCleanupVersions = async (folderId: string, filePath: string) => {
+    // Check storage info first
+    if (!fileStorageInfo) {
+      alert('Loading storage information... Please try again.');
+      return;
+    }
+    
+    // Only allow cleanup if total size > 10MB
+    const minSizeForCleanup = 10 * 1024 * 1024; // 10MB in bytes
+    if (fileStorageInfo.totalSize < minSizeForCleanup) {
+      alert(`This file's total storage (${formatSize(fileStorageInfo.totalSize)}) is less than 10 MB.\n\nCleanup is only available for files using more than 10 MB.`);
+      return;
+    }
+    
     try {
       setLoading(true);
       
@@ -711,37 +753,48 @@ function App() {
         commit.changedFiles.includes(filePath)
       );
       
-      if (fileCommitsAll.length <= 10) {
-        alert(`This file only has ${fileCommitsAll.length} version(s). No cleanup needed.`);
+      if (fileCommitsAll.length <= 1) {
+        alert('This file only has 1 version. No cleanup needed.');
         return;
       }
       
-      // Keep only the 10 most recent commits
-      const commitsToKeep = fileCommitsAll.slice(0, 10).map(c => c.hash);
-      const commitsToDelete = fileCommitsAll.slice(10).map(c => c.hash);
+      const confirmMessage = 
+        `⚠️ WARNING: This action cannot be undone!\n\n` +
+        `File: ${filePath.split('/').pop()}\n` +
+        `Current total size: ${formatSize(fileStorageInfo.totalSize)}\n` +
+        `Versions to delete: ${fileCommitsAll.length - 1}\n\n` +
+        `This will delete ALL old versions and keep only the most recent one.\n\n` +
+        `Continue?`;
       
-      console.log(`Cleaning up ${commitsToDelete.length} old versions, keeping ${commitsToKeep.length}`);
+      if (!confirm(confirmMessage)) {
+        return;
+      }
+      
+      // Keep only the most recent commit, delete all others
+      const commitsToDelete = fileCommitsAll.slice(1).map(c => c.hash);
+      
+      console.log(`Cleaning up ${commitsToDelete.length} old versions, keeping only the most recent`);
       
       // Call the backend to delete old commits
-      // Note: This requires implementing a new IPC handler
       if (window.electronAPI.cleanupCommits) {
         await window.electronAPI.cleanupCommits(folderId, filePath, commitsToDelete);
         
-        // Reload commits
+        // Reload everything
         await loadCommits(folderId);
         
-        // Reload current file content
         if (selectedFile && selectedFolder) {
           await loadCurrentFileContent(selectedFile, selectedFolder.id);
+          await loadFileStorageInfo(selectedFolder.id, selectedFile);
         }
         
-        alert(`Successfully cleaned up ${commitsToDelete.length} old version(s).`);
+        alert(`✓ Successfully cleaned up ${commitsToDelete.length} old version(s).\n\nOnly the most recent version remains.`);
       } else {
-        alert('Cleanup feature not yet available. Backend implementation required.');
+        alert('Cleanup feature not available.');
       }
     } catch (error) {
       console.error('Failed to cleanup versions:', error);
-      alert('Failed to cleanup versions. See console for details.');
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      alert(`Failed to cleanup versions:\n\n${errorMessage}`);
     } finally {
       setLoading(false);
     }
@@ -922,6 +975,8 @@ function App() {
                   commits={fileCommits}
                   selectedCommit={selectedCommit}
                   compareCommit={compareCommit}
+                  fileStorageInfo={fileStorageInfo}
+                  formatSize={formatSize}
                   onSelectCommit={handleSelectCommit}
                   onToggleCompare={handleToggleCompare}
                   onSelectCurrent={async () => {

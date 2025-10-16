@@ -31,6 +31,17 @@ export interface DiffResult {
   newCommit?: string;
 }
 
+export interface FileStorageInfo {
+  currentSize: number;      // Bytes do arquivo atual em disco
+  versionsSize: number;     // Soma de todas as versões no Git
+  versionCount: number;     // Número de versões
+  totalSize: number;        // currentSize + versionsSize
+  sizeByCommit: Array<{     // Tamanho de cada versão
+    hash: string;
+    size: number;
+  }>;
+}
+
 export interface AppConfig {
   watchedFolders: WatchedFolder[];
   windowBounds?: {
@@ -57,6 +68,7 @@ export interface ElectronAPI {
   getDiff: (folderId: string, filePath: string, oldCommit: string, newCommit?: string) => Promise<DiffResult>;
   restoreFile: (folderId: string, filePath: string, commitHash: string) => Promise<void>;
   cleanupCommits?: (folderId: string, filePath: string, commitsToDelete: string[]) => Promise<void>;
+  getFileStorageInfo?: (folderId: string, filePath: string) => Promise<FileStorageInfo>;
   
   // File watching
   startWatching: (folderId: string) => Promise<void>;

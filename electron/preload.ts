@@ -20,6 +20,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.invoke('restore-file', folderId, filePath, commitHash),
   cleanupCommits: (folderId: string, filePath: string, commitsToDelete: string[]) =>
     ipcRenderer.invoke('cleanup-commits', folderId, filePath, commitsToDelete),
+  getFileStorageInfo: (folderId: string, filePath: string) =>
+    ipcRenderer.invoke('get-file-storage-info', folderId, filePath),
   
   // File watching
   startWatching: (folderId: string) => ipcRenderer.invoke('start-watching', folderId),
